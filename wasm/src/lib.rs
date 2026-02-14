@@ -1,11 +1,105 @@
 use std::io::Cursor;
+use std::alloc::{alloc, dealloc, Layout};
+use std::ffi::c_void;
+use std::ptr::{self, null_mut};
 
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-use image::codecs::webp::WebPEncoder;
 use image::imageops::FilterType as ResizeFilter;
 use image::{ColorType, DynamicImage, GenericImageView, ImageEncoder};
 use wasm_bindgen::prelude::*;
+
+type CmpFn = extern "C" fn(*const c_void, *const c_void) -> i32;
+
+#[inline]
+unsafe fn allocation_layout(payload_size: usize) -> Option<Layout> {
+    let total = payload_size.checked_add(std::mem::size_of::<usize>())?;
+    Layout::from_size_align(total.max(std::mem::size_of::<usize>()), std::mem::align_of::<usize>())
+        .ok()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
+    let Some(layout) = allocation_layout(size) else {
+        return null_mut();
+    };
+    let base = alloc(layout);
+    if base.is_null() {
+        return null_mut();
+    }
+    ptr::write(base.cast::<usize>(), size);
+    base.add(std::mem::size_of::<usize>()).cast::<c_void>()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut c_void {
+    let Some(total) = count.checked_mul(size) else {
+        return null_mut();
+    };
+    let ptr = malloc(total);
+    if !ptr.is_null() {
+        ptr::write_bytes(ptr.cast::<u8>(), 0, total);
+    }
+    ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn free(ptr: *mut c_void) {
+    if ptr.is_null() {
+        return;
+    }
+    let header_size = std::mem::size_of::<usize>();
+    let base = ptr.cast::<u8>().sub(header_size);
+    let payload_size = ptr::read(base.cast::<usize>());
+    let Some(layout) = allocation_layout(payload_size) else {
+        return;
+    };
+    dealloc(base, layout);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn qsort(base: *mut c_void, nmemb: usize, size: usize, compar: CmpFn) {
+    if base.is_null() || nmemb <= 1 || size == 0 {
+        return;
+    }
+    let bytes = base.cast::<u8>();
+    for i in 0..nmemb {
+        for j in 0..(nmemb - 1 - i) {
+            let a = bytes.add(j * size);
+            let b = bytes.add((j + 1) * size);
+            if compar(a.cast::<c_void>(), b.cast::<c_void>()) > 0 {
+                for k in 0..size {
+                    let pa = a.add(k);
+                    let pb = b.add(k);
+                    let tmp = ptr::read(pa);
+                    ptr::write(pa, ptr::read(pb));
+                    ptr::write(pb, tmp);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bsearch(
+    key: *const c_void,
+    base: *const c_void,
+    nmemb: usize,
+    size: usize,
+    compar: CmpFn,
+) -> *mut c_void {
+    if key.is_null() || base.is_null() || size == 0 {
+        return null_mut();
+    }
+    let bytes = base.cast::<u8>();
+    for i in 0..nmemb {
+        let current = bytes.add(i * size);
+        if compar(key, current.cast::<c_void>()) == 0 {
+            return current.cast::<c_void>().cast_mut();
+        }
+    }
+    null_mut()
+}
 
 fn map_error(message: String) -> JsValue {
     JsValue::from_str(&message)
@@ -60,10 +154,13 @@ fn encode_image(
         }
         "webp" => {
             let rgba = image.to_rgba8();
-            let encoder = WebPEncoder::new_lossless(&mut cursor);
-            encoder
-                .encode(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
-                .map_err(|error| error.to_string())?;
+            let encoder = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height());
+            let encoded = if lossless {
+                encoder.encode_lossless()
+            } else {
+                encoder.encode(clamped_quality as f32)
+            };
+            output.extend_from_slice(encoded.as_ref());
         }
         _ => return Err(format!("Unsupported target format: {target_format}")),
     }

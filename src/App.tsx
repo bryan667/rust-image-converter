@@ -93,50 +93,6 @@ const getImageDimensions = async (file: File) => {
   return { width, height };
 };
 
-const convertToWebpInBrowser = async (
-  file: File,
-  qualityPercent: number,
-  resizeEnabled: boolean,
-  resizePercent: number,
-) => {
-  const bitmap = await createImageBitmap(file);
-  const scale =
-    resizeEnabled && resizePercent < 100
-      ? Math.max(0.01, resizePercent / 100)
-      : 1;
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    bitmap.close();
-    throw new Error('Could not initialize canvas context for WebP conversion.');
-  }
-
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  const quality = Math.min(1, Math.max(0.01, qualityPercent / 100));
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (result) => {
-        if (result) {
-          resolve(result);
-          return;
-        }
-        reject(new Error('WebP conversion failed in browser encoder.'));
-      },
-      'image/webp',
-      quality,
-    );
-  });
-
-  return new Uint8Array(await blob.arrayBuffer());
-};
-
 const App = () => {
   const [wasmReady, setWasmReady] = useState(false);
   const [wasmError, setWasmError] = useState<string | null>(null);
@@ -252,34 +208,24 @@ const App = () => {
       );
 
       try {
-        let output: Uint8Array;
-        if (targetFormat === 'webp' && !selectedCompression.lossless) {
-          output = await convertToWebpInBrowser(
-            item.file,
-            selectedCompression.quality,
-            resizeEnabled,
-            normalizedPercent,
-          );
-        } else {
-          let targetWidth = 0;
-          let targetHeight = 0;
-          if (resizeEnabled && normalizedPercent < 100) {
-            const { width, height } = await getImageDimensions(item.file);
-            const scale = normalizedPercent / 100;
-            targetWidth = Math.max(1, Math.round(width * scale));
-            targetHeight = Math.max(1, Math.round(height * scale));
-          }
-
-          const buffer = await item.file.arrayBuffer();
-          output = convert_image_with_options(
-            new Uint8Array(buffer),
-            targetFormat,
-            selectedCompression.quality,
-            targetWidth,
-            targetHeight,
-            selectedCompression.lossless,
-          );
+        let targetWidth = 0;
+        let targetHeight = 0;
+        if (resizeEnabled && normalizedPercent < 100) {
+          const { width, height } = await getImageDimensions(item.file);
+          const scale = normalizedPercent / 100;
+          targetWidth = Math.max(1, Math.round(width * scale));
+          targetHeight = Math.max(1, Math.round(height * scale));
         }
+
+        const buffer = await item.file.arrayBuffer();
+        const output = convert_image_with_options(
+          new Uint8Array(buffer),
+          targetFormat,
+          selectedCompression.quality,
+          targetWidth,
+          targetHeight,
+          selectedCompression.lossless,
+        );
 
         const outputBytes = new Uint8Array(output.byteLength);
         outputBytes.set(output);
@@ -443,7 +389,7 @@ const App = () => {
               {compressionOptions.lossy.label}
             </button>
           </div>
-          <small>PNG output is always lossless.</small>
+          <small>PNG output is always lossless. JPEG and WebP use quality presets.</small>
         </div>
 
         <div className="control-block">

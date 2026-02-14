@@ -8,7 +8,7 @@
     "build": "npm run wasm:build && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "wasm:build": "wasm-pack build wasm --target web --release && node scripts/prepare-wasm-pkg.mjs",
+    "wasm:build": "node scripts/wasm-build.mjs && node scripts/prepare-wasm-pkg.mjs",
     "release:local": "npm run build && npm run lint"
   },
   "dependencies": {
