@@ -46,6 +46,7 @@ const mimeByFormat: Record<Format, string> = {
 };
 
 const knownFormats: Format[] = ['webp', 'png', 'jpeg'];
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 
 const formatFromFile = (file: File): Format | 'unknown' => {
   const type = file.type.toLowerCase();
@@ -92,6 +93,50 @@ const getImageDimensions = async (file: File) => {
   return { width, height };
 };
 
+const convertToWebpInBrowser = async (
+  file: File,
+  qualityPercent: number,
+  resizeEnabled: boolean,
+  resizePercent: number,
+) => {
+  const bitmap = await createImageBitmap(file);
+  const scale =
+    resizeEnabled && resizePercent < 100
+      ? Math.max(0.01, resizePercent / 100)
+      : 1;
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    bitmap.close();
+    throw new Error('Could not initialize canvas context for WebP conversion.');
+  }
+
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const quality = Math.min(1, Math.max(0.01, qualityPercent / 100));
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) {
+          resolve(result);
+          return;
+        }
+        reject(new Error('WebP conversion failed in browser encoder.'));
+      },
+      'image/webp',
+      quality,
+    );
+  });
+
+  return new Uint8Array(await blob.arrayBuffer());
+};
+
 const App = () => {
   const [wasmReady, setWasmReady] = useState(false);
   const [wasmError, setWasmError] = useState<string | null>(null);
@@ -103,6 +148,7 @@ const App = () => {
   const [resizeEnabled, setResizeEnabled] = useState(false);
   const [resizePercent, setResizePercent] = useState(100);
   const [isDragging, setIsDragging] = useState(false);
+  const [inputMessage, setInputMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
@@ -136,7 +182,24 @@ const App = () => {
   );
 
   const handleFiles = (fileList: FileList | File[]) => {
-    const nextItems: ImageItem[] = Array.from(fileList).map((file) => {
+    const files = Array.from(fileList);
+    const accepted = files.filter((file) => file.size <= MAX_FILE_SIZE_BYTES);
+    const rejected = files.filter((file) => file.size > MAX_FILE_SIZE_BYTES);
+
+    if (rejected.length > 0) {
+      const names = rejected
+        .slice(0, 2)
+        .map((file) => file.name)
+        .join(', ');
+      const suffix = rejected.length > 2 ? ', ...' : '';
+      setInputMessage(
+        `Skipped ${rejected.length} file(s) over ${formatBytes(MAX_FILE_SIZE_BYTES)}: ${names}${suffix}`,
+      );
+    } else {
+      setInputMessage(null);
+    }
+
+    const nextItems: ImageItem[] = accepted.map((file) => {
       const sourceUrl = URL.createObjectURL(file);
       return {
         id: crypto.randomUUID(),
@@ -146,6 +209,8 @@ const App = () => {
         status: 'queued',
       };
     });
+
+    if (!nextItems.length) return;
     setItems((prev) => [...prev, ...nextItems]);
   };
 
@@ -187,24 +252,34 @@ const App = () => {
       );
 
       try {
-        const buffer = await item.file.arrayBuffer();
-        let targetWidth = 0;
-        let targetHeight = 0;
-        if (resizeEnabled && normalizedPercent < 100) {
-          const { width, height } = await getImageDimensions(item.file);
-          const scale = normalizedPercent / 100;
-          targetWidth = Math.max(1, Math.round(width * scale));
-          targetHeight = Math.max(1, Math.round(height * scale));
-        }
+        let output: Uint8Array;
+        if (targetFormat === 'webp' && !selectedCompression.lossless) {
+          output = await convertToWebpInBrowser(
+            item.file,
+            selectedCompression.quality,
+            resizeEnabled,
+            normalizedPercent,
+          );
+        } else {
+          let targetWidth = 0;
+          let targetHeight = 0;
+          if (resizeEnabled && normalizedPercent < 100) {
+            const { width, height } = await getImageDimensions(item.file);
+            const scale = normalizedPercent / 100;
+            targetWidth = Math.max(1, Math.round(width * scale));
+            targetHeight = Math.max(1, Math.round(height * scale));
+          }
 
-        const output = convert_image_with_options(
-          new Uint8Array(buffer),
-          targetFormat,
-          selectedCompression.quality,
-          targetWidth,
-          targetHeight,
-          selectedCompression.lossless,
-        );
+          const buffer = await item.file.arrayBuffer();
+          output = convert_image_with_options(
+            new Uint8Array(buffer),
+            targetFormat,
+            selectedCompression.quality,
+            targetWidth,
+            targetHeight,
+            selectedCompression.lossless,
+          );
+        }
 
         const outputBytes = new Uint8Array(output.byteLength);
         outputBytes.set(output);
@@ -368,6 +443,7 @@ const App = () => {
               {compressionOptions.lossy.label}
             </button>
           </div>
+          <small>PNG output is always lossless.</small>
         </div>
 
         <div className="control-block">
@@ -407,8 +483,12 @@ const App = () => {
           <div>
             <strong>Drop images here</strong>
             <p>
-              or select files from your computer. Supported: JPG, PNG, WebP.
+              or select files from your computer. Supported: JPG, PNG, WebP. Max
+              file size: {formatBytes(MAX_FILE_SIZE_BYTES)} each.
             </p>
+            {inputMessage ? (
+              <p className="input-message">{inputMessage}</p>
+            ) : null}
           </div>
           <label className="file-button">
             Select files

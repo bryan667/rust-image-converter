@@ -163,6 +163,12 @@
   display: none;
 }
 
+.input-message {
+  margin-top: 10px;
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+
 .actions {
   margin-top: 28px;
   display: flex;
