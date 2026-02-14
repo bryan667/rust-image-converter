@@ -5,6 +5,7 @@ import './App.css';
 import init, { convert_image_with_options } from '../wasm/pkg/image_wasm';
 
 type Format = 'webp' | 'png' | 'jpeg';
+type CompressionPreset = 'lossless' | 'sweet_spot' | 'lossy';
 
 type ConvertStatus = 'queued' | 'processing' | 'done' | 'error' | 'skipped';
 
@@ -23,8 +24,14 @@ type ImageItem = {
   };
 };
 
-const DEFAULT_QUALITY = 78;
-const LOSSLESS_QUALITY = 100;
+const compressionOptions: Record<
+  CompressionPreset,
+  { label: string; quality: number; lossless: boolean }
+> = {
+  lossless: { label: 'Lossless (95%)', quality: 95, lossless: true },
+  sweet_spot: { label: 'Sweet spot (70%)', quality: 70, lossless: false },
+  lossy: { label: 'Lossy (45%)', quality: 45, lossless: false },
+};
 
 const formatLabels: Record<Format, string> = {
   webp: 'WebP',
@@ -77,16 +84,24 @@ const readQueryFormat = (value: string | null): Format | null => {
   return null;
 };
 
+const getImageDimensions = async (file: File) => {
+  const bitmap = await createImageBitmap(file);
+  const width = bitmap.width;
+  const height = bitmap.height;
+  bitmap.close();
+  return { width, height };
+};
+
 const App = () => {
   const [wasmReady, setWasmReady] = useState(false);
   const [wasmError, setWasmError] = useState<string | null>(null);
   const [items, setItems] = useState<ImageItem[]>([]);
   const [targetFormat, setTargetFormat] = useState<Format>('webp');
   const [sourceFilter, setSourceFilter] = useState<Format | 'any'>('any');
-  const [lossy, setLossy] = useState(true);
-  const [resizeToMax, setResizeToMax] = useState(false);
-  const [maxWidth, setMaxWidth] = useState(1600);
-  const [maxHeight, setMaxHeight] = useState(1600);
+  const [compressionPreset, setCompressionPreset] =
+    useState<CompressionPreset>('sweet_spot');
+  const [resizeEnabled, setResizeEnabled] = useState(false);
+  const [resizePercent, setResizePercent] = useState(100);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -115,6 +130,10 @@ const App = () => {
     () => items.filter((item) => item.status === 'done' && item.output).length,
     [items],
   );
+  const queuedCount = useMemo(
+    () => items.filter((item) => item.status === 'queued').length,
+    [items],
+  );
 
   const handleFiles = (fileList: FileList | File[]) => {
     const nextItems: ImageItem[] = Array.from(fileList).map((file) => {
@@ -140,10 +159,11 @@ const App = () => {
 
   const handleConvertAll = async () => {
     if (!wasmReady) return;
-    const quality = lossy ? DEFAULT_QUALITY : LOSSLESS_QUALITY;
+    const selectedCompression = compressionOptions[compressionPreset];
+    const normalizedPercent = Math.min(100, Math.max(1, resizePercent));
 
     for (const item of items) {
-      if (item.status === 'done' || item.status === 'processing') continue;
+      if (item.status !== 'queued') continue;
       if (sourceFilter !== 'any' && item.sourceFormat !== sourceFilter) {
         setItems((prev) =>
           prev.map((entry) =>
@@ -168,13 +188,22 @@ const App = () => {
 
       try {
         const buffer = await item.file.arrayBuffer();
+        let targetWidth = 0;
+        let targetHeight = 0;
+        if (resizeEnabled && normalizedPercent < 100) {
+          const { width, height } = await getImageDimensions(item.file);
+          const scale = normalizedPercent / 100;
+          targetWidth = Math.max(1, Math.round(width * scale));
+          targetHeight = Math.max(1, Math.round(height * scale));
+        }
+
         const output = convert_image_with_options(
           new Uint8Array(buffer),
           targetFormat,
-          quality,
-          resizeToMax ? maxWidth : 0,
-          resizeToMax ? maxHeight : 0,
-          !lossy,
+          selectedCompression.quality,
+          targetWidth,
+          targetHeight,
+          selectedCompression.lossless,
         );
 
         const outputBytes = new Uint8Array(output.byteLength);
@@ -265,7 +294,7 @@ const App = () => {
         <div>
           <span className="eyebrow">Client-side Rust + WASM</span>
           <h1>Web Image Converter</h1>
-          <p>Convert PNG, JPEG, and WebP entirely in your browser.</p>
+          <p>Convert images entirely in your browser, client side only.</p>
         </div>
         <div className="status-card">
           <div
@@ -321,53 +350,47 @@ const App = () => {
           <label>Compression</label>
           <div className="toggle-row">
             <button
-              className={lossy ? 'active' : ''}
-              onClick={() => setLossy(true)}
+              className={compressionPreset === 'lossless' ? 'active' : ''}
+              onClick={() => setCompressionPreset('lossless')}
             >
-              Lossy (smaller)
+              {compressionOptions.lossless.label}
             </button>
             <button
-              className={!lossy ? 'active' : ''}
-              onClick={() => setLossy(false)}
+              className={compressionPreset === 'sweet_spot' ? 'active' : ''}
+              onClick={() => setCompressionPreset('sweet_spot')}
             >
-              Lossless*
+              {compressionOptions.sweet_spot.label}
+            </button>
+            <button
+              className={compressionPreset === 'lossy' ? 'active' : ''}
+              onClick={() => setCompressionPreset('lossy')}
+            >
+              {compressionOptions.lossy.label}
             </button>
           </div>
-          <small>
-            *JPEG uses quality 100 as a near-lossless fallback. WebP is encoded
-            lossless here.
-          </small>
         </div>
 
         <div className="control-block">
-          <label>Resize (optional)</label>
+          <label>Resize (optional, %)</label>
           <div className="resize-row">
             <button
-              className={resizeToMax ? 'active' : ''}
-              onClick={() => setResizeToMax(!resizeToMax)}
+              className={resizeEnabled ? 'active' : ''}
+              onClick={() => setResizeEnabled(!resizeEnabled)}
             >
-              {resizeToMax ? 'On' : 'Off'}
+              {resizeEnabled ? 'On' : 'Off'}
             </button>
             <input
               type="number"
-              min={64}
-              max={6000}
-              value={maxWidth}
-              onChange={(event) => setMaxWidth(Number(event.target.value))}
-              disabled={!resizeToMax}
-              aria-label="Max width"
+              min={1}
+              max={100}
+              value={resizePercent}
+              onChange={(event) => setResizePercent(Number(event.target.value))}
+              disabled={!resizeEnabled}
+              aria-label="Resize percentage"
             />
-            <span>x</span>
-            <input
-              type="number"
-              min={64}
-              max={6000}
-              value={maxHeight}
-              onChange={(event) => setMaxHeight(Number(event.target.value))}
-              disabled={!resizeToMax}
-              aria-label="Max height"
-            />
+            <span>%</span>
           </div>
+          <small>Maintains original aspect ratio automatically.</small>
         </div>
       </section>
 
@@ -423,9 +446,9 @@ const App = () => {
         <div className="action-buttons">
           <button
             onClick={handleConvertAll}
-            disabled={!items.length || !wasmReady}
+            disabled={!queuedCount || !wasmReady}
           >
-            Convert {items.length ? `(${items.length})` : ''}
+            Convert {queuedCount ? `(${queuedCount})` : ''}
           </button>
           <button onClick={downloadAllZip} disabled={!outputCount}>
             Download ZIP
