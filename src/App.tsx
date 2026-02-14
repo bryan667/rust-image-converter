@@ -1,52 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { DragEvent } from 'react';
 import JSZip from 'jszip';
 import './App.css';
 import init, { convert_image_with_options } from '../wasm/pkg/image_wasm';
-
-type Format = 'webp' | 'png' | 'jpeg';
-type CompressionPreset = 'lossless' | 'sweet_spot' | 'lossy';
-
-type ConvertStatus = 'queued' | 'processing' | 'done' | 'error' | 'skipped';
-
-type ImageItem = {
-  id: string;
-  file: File;
-  sourceFormat: Format | 'unknown';
-  sourceUrl: string;
-  status: ConvertStatus;
-  error?: string;
-  output?: {
-    blob: Blob;
-    url: string;
-    size: number;
-    name: string;
-  };
-};
-
-const compressionOptions: Record<
+import DropImagesSection from '../components/DropImagesSection';
+import ImageFormatControls from '../components/ImageFormatControls';
+import ProcessedItemsSection from '../components/ProcessedItemsSection';
+import {
+  compressionOptions,
+  formatLabels,
+  knownFormats,
+  MAX_FILE_SIZE_BYTES,
+  mimeByFormat,
+} from './imageConverterTypes';
+import type {
   CompressionPreset,
-  { label: string; quality: number; lossless: boolean }
-> = {
-  lossless: { label: 'Lossless (95%)', quality: 95, lossless: true },
-  sweet_spot: { label: 'Sweet spot (70%)', quality: 70, lossless: false },
-  lossy: { label: 'Lossy (45%)', quality: 45, lossless: false },
-};
-
-const formatLabels: Record<Format, string> = {
-  webp: 'WebP',
-  png: 'PNG',
-  jpeg: 'JPEG',
-};
-
-const mimeByFormat: Record<Format, string> = {
-  webp: 'image/webp',
-  png: 'image/png',
-  jpeg: 'image/jpeg',
-};
-
-const knownFormats: Format[] = ['webp', 'png', 'jpeg'];
-const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+  Format,
+  ImageItem,
+} from './imageConverterTypes';
 
 const formatFromFile = (file: File): Format | 'unknown' => {
   const type = file.type.toLowerCase();
@@ -103,7 +73,6 @@ const App = () => {
     useState<CompressionPreset>('sweet_spot');
   const [resizeEnabled, setResizeEnabled] = useState(false);
   const [resizePercent, setResizePercent] = useState(100);
-  const [isDragging, setIsDragging] = useState(false);
   const [inputMessage, setInputMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,8 +106,7 @@ const App = () => {
     [items],
   );
 
-  const handleFiles = (fileList: FileList | File[]) => {
-    const files = Array.from(fileList);
+  const handleFiles = (files: File[]) => {
     const accepted = files.filter((file) => file.size <= MAX_FILE_SIZE_BYTES);
     const rejected = files.filter((file) => file.size > MAX_FILE_SIZE_BYTES);
 
@@ -168,14 +136,6 @@ const App = () => {
 
     if (!nextItems.length) return;
     setItems((prev) => [...prev, ...nextItems]);
-  };
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    if (event.dataTransfer.files?.length) {
-      handleFiles(event.dataTransfer.files);
-    }
   };
 
   const handleConvertAll = async () => {
@@ -330,125 +290,31 @@ const App = () => {
         </div>
       </header>
 
-      <section className="controls">
-        <div className="control-block">
-          <label>Source format</label>
-          <div className="pill-group">
-            <button
-              className={sourceFilter === 'any' ? 'active' : ''}
-              onClick={() => setSourceFilter('any')}
-            >
-              Any
-            </button>
-            {knownFormats.map((format) => (
-              <button
-                key={format}
-                className={sourceFilter === format ? 'active' : ''}
-                onClick={() => setSourceFilter(format)}
-              >
-                {formatLabels[format]}
-              </button>
-            ))}
-          </div>
-        </div>
+      <ImageFormatControls
+        sourceFilter={sourceFilter}
+        targetFormat={targetFormat}
+        compressionPreset={compressionPreset}
+        resizeEnabled={resizeEnabled}
+        resizePercent={resizePercent}
+        knownFormats={knownFormats}
+        formatLabels={formatLabels}
+        compressionLabels={{
+          lossless: compressionOptions.lossless.label,
+          sweet_spot: compressionOptions.sweet_spot.label,
+          lossy: compressionOptions.lossy.label,
+        }}
+        onSourceFilterChange={setSourceFilter}
+        onTargetFormatChange={setTargetFormat}
+        onCompressionPresetChange={setCompressionPreset}
+        onResizeEnabledChange={setResizeEnabled}
+        onResizePercentChange={setResizePercent}
+      />
 
-        <div className="control-block">
-          <label>Target format</label>
-          <div className="pill-group">
-            {knownFormats.map((format) => (
-              <button
-                key={format}
-                className={targetFormat === format ? 'active' : ''}
-                onClick={() => setTargetFormat(format)}
-              >
-                {formatLabels[format]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="control-block">
-          <label>Compression</label>
-          <div className="toggle-row">
-            <button
-              className={compressionPreset === 'lossless' ? 'active' : ''}
-              onClick={() => setCompressionPreset('lossless')}
-            >
-              {compressionOptions.lossless.label}
-            </button>
-            <button
-              className={compressionPreset === 'sweet_spot' ? 'active' : ''}
-              onClick={() => setCompressionPreset('sweet_spot')}
-            >
-              {compressionOptions.sweet_spot.label}
-            </button>
-            <button
-              className={compressionPreset === 'lossy' ? 'active' : ''}
-              onClick={() => setCompressionPreset('lossy')}
-            >
-              {compressionOptions.lossy.label}
-            </button>
-          </div>
-          <small>PNG output is always lossless. JPEG and WebP use quality presets.</small>
-        </div>
-
-        <div className="control-block">
-          <label>Resize (optional, %)</label>
-          <div className="resize-row">
-            <button
-              className={resizeEnabled ? 'active' : ''}
-              onClick={() => setResizeEnabled(!resizeEnabled)}
-            >
-              {resizeEnabled ? 'On' : 'Off'}
-            </button>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={resizePercent}
-              onChange={(event) => setResizePercent(Number(event.target.value))}
-              disabled={!resizeEnabled}
-              aria-label="Resize percentage"
-            />
-            <span>%</span>
-          </div>
-          <small>Maintains original aspect ratio automatically.</small>
-        </div>
-      </section>
-
-      <section className="drop-zone">
-        <div
-          className={`drop-surface ${isDragging ? 'dragging' : ''}`}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-        >
-          <div>
-            <strong>Drop images here</strong>
-            <p>
-              or select files from your computer. Supported: JPG, PNG, WebP. Max
-              file size: {formatBytes(MAX_FILE_SIZE_BYTES)} each.
-            </p>
-            {inputMessage ? (
-              <p className="input-message">{inputMessage}</p>
-            ) : null}
-          </div>
-          <label className="file-button">
-            Select files
-            <input
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => {
-                if (event.target.files) handleFiles(event.target.files);
-              }}
-            />
-          </label>
-        </div>
-      </section>
+      <DropImagesSection
+        inputMessage={inputMessage}
+        maxFileSizeLabel={formatBytes(MAX_FILE_SIZE_BYTES)}
+        onFileSelect={handleFiles}
+      />
 
       <section className="actions">
         <div className="stats">
@@ -465,7 +331,7 @@ const App = () => {
             <strong>
               {stats.original
                 ? `${formatBytes(stats.delta)} (${stats.percent}%)`
-                : '—'}
+                : '-'}
             </strong>
           </div>
         </div>
@@ -485,58 +351,11 @@ const App = () => {
         </div>
       </section>
 
-      <section className="grid">
-        {items.map((item) => (
-          <article key={item.id} className={`card ${item.status}`}>
-            <div className="thumbs">
-              <img src={item.sourceUrl} alt={item.file.name} />
-              {item.output?.url ? (
-                <img
-                  src={item.output.url}
-                  alt={`${item.file.name} converted`}
-                />
-              ) : null}
-            </div>
-            <div className="card-body">
-              <div className="card-title">
-                <strong>{item.file.name}</strong>
-                <span className="badge">{item.sourceFormat}</span>
-              </div>
-              <div className="meta">
-                <span>{formatBytes(item.file.size)} original</span>
-                {item.output ? (
-                  <span>{formatBytes(item.output.size)} converted</span>
-                ) : null}
-              </div>
-              <div className="status-row">
-                <span className={`status ${item.status}`}>{item.status}</span>
-                {item.error ? (
-                  <span className="error">{item.error}</span>
-                ) : null}
-              </div>
-              <div className="card-actions">
-                <button
-                  disabled={!item.output}
-                  onClick={() =>
-                    item.output &&
-                    downloadBlob(item.output.blob, item.output.name)
-                  }
-                >
-                  Download
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
-        {!items.length ? (
-          <div className="empty">
-            <h3>Nothing here yet</h3>
-            <p>
-              Add images to start converting. Everything stays in your browser.
-            </p>
-          </div>
-        ) : null}
-      </section>
+      <ProcessedItemsSection
+        items={items}
+        formatBytes={formatBytes}
+        onDownload={downloadBlob}
+      />
     </div>
   );
 };
