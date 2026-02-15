@@ -216,36 +216,43 @@ const App = () => {
   };
 
   const downloadAllZip = async () => {
-    if (!outputCount) return;
+    const doneItems = items.filter(
+      (item): item is ImageItem & { output: NonNullable<ImageItem['output']> } =>
+        item.status === 'done' && Boolean(item.output),
+    );
+    if (!doneItems.length) return;
+
     const zip = new JSZip();
-    items.forEach((item) => {
-      if (item.output) {
-        zip.file(item.output.name, item.output.blob);
-      }
+    doneItems.forEach((item) => {
+      zip.file(item.output.name, item.output.blob);
     });
     const blob = await zip.generateAsync({ type: 'blob' });
     downloadBlob(blob, `converted-${Date.now()}.zip`);
   };
 
-  const outputCount = useMemo(
-    () => items.filter((item) => item.status === 'done' && item.output).length,
-    [items],
-  );
-  const queuedCount = useMemo(
-    () => items.filter((item) => item.status === 'queued').length,
-    [items],
-  );
-
-  const stats = useMemo(() => {
+  const itemSummary = useMemo(() => {
+    let output = 0;
+    let queued = 0;
     let original = 0;
     let converted = 0;
-    items.forEach((item) => {
+    for (const item of items) {
+      if (item.status === 'queued') queued += 1;
+      if (item.status === 'done' && item.output) output += 1;
       original += item.file.size;
       if (item.output) converted += item.output.size;
-    });
+    }
     const delta = original - converted;
     const percent = original > 0 ? Math.round((delta / original) * 100) : 0;
-    return { original, converted, delta, percent };
+    return {
+      output,
+      queued,
+      stats: {
+        original,
+        converted,
+        delta,
+        percent,
+      },
+    };
   }, [items]);
 
   return (
@@ -293,17 +300,17 @@ const App = () => {
         <div className="stats">
           <div>
             <span>Original</span>
-            <strong>{formatBytes(stats.original)}</strong>
+            <strong>{formatBytes(itemSummary.stats.original)}</strong>
           </div>
           <div>
             <span>Converted</span>
-            <strong>{formatBytes(stats.converted)}</strong>
+            <strong>{formatBytes(itemSummary.stats.converted)}</strong>
           </div>
           <div>
             <span>Saved</span>
             <strong>
-              {stats.original
-                ? `${formatBytes(stats.delta)} (${stats.percent}%)`
+              {itemSummary.stats.original
+                ? `${formatBytes(itemSummary.stats.delta)} (${itemSummary.stats.percent}%)`
                 : '-'}
             </strong>
           </div>
@@ -311,15 +318,15 @@ const App = () => {
         <div className="action-buttons">
           <button
             onClick={handleConvertAll}
-            disabled={!queuedCount || !wasmState.ready || isConverting}
+            disabled={!itemSummary.queued || !wasmState.ready || isConverting}
           >
             {isConverting
               ? 'Converting...'
-              : `Convert ${queuedCount ? `(${queuedCount})` : ''}`}
+              : `Convert ${itemSummary.queued ? `(${itemSummary.queued})` : ''}`}
           </button>
           <button
             onClick={downloadAllZip}
-            disabled={!outputCount || !wasmState.ready || isConverting}
+            disabled={!itemSummary.output || !wasmState.ready || isConverting}
           >
             Download ZIP
           </button>
@@ -338,11 +345,11 @@ const App = () => {
         onDownload={downloadBlob}
         isConverting={isConverting}
       />
-      {isConverting ? (
+      {isConverting && (
         <div className="converting-overlay" aria-live="polite">
           <div className="spinner" aria-hidden="true" />
         </div>
-      ) : null}
+      )}
     </div>
   );
 };
