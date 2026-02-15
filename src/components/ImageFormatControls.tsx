@@ -3,7 +3,7 @@ import {
   knownFormats,
   type CompressionPreset,
   type ConversionSettings,
-} from '../src/types';
+} from '../types';
 import type { Dispatch, SetStateAction } from 'react';
 
 type ImageFormatControlsProps = {

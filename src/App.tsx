@@ -3,61 +3,20 @@ import JSZip from 'jszip';
 import pLimit from 'p-limit';
 import './App.css';
 import init, { convert_image_with_options } from '../wasm/pkg/image_wasm';
-import DropImagesSection from '../components/DropImagesSection';
-import ImageFormatControls from '../components/ImageFormatControls';
-import ProcessedItemsSection from '../components/ProcessedItemsSection';
+import DropImagesSection from './components/DropImagesSection';
+import ImageFormatControls from './components/ImageFormatControls';
+import ProcessedItemsSection from './components/ProcessedItemsSection';
 import { compressionOptions, MAX_FILE_SIZE_BYTES, mimeByFormat } from './types';
-import type { ConversionSettings, Format, ImageItem } from './types';
+import type { ConversionSettings, ImageItem } from './types';
+import {
+  readQueryFormat,
+  replaceExtension,
+  formatBytes,
+  formatFromFile,
+  getImageDimensions,
+} from './helpers';
 
 const CONVERSION_CONCURRENCY = 4;
-
-const formatFromFile = (file: File): Format | 'unknown' => {
-  const type = file.type.toLowerCase();
-  if (type.includes('png')) return 'png';
-  if (type.includes('webp')) return 'webp';
-  if (type.includes('jpeg') || type.includes('jpg')) return 'jpeg';
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.png')) return 'png';
-  if (name.endsWith('.webp')) return 'webp';
-  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'jpeg';
-  return 'unknown';
-};
-
-const replaceExtension = (name: string, target: Format) => {
-  const base = name.replace(/\.[^/.]+$/, '');
-  return `${base}.${target === 'jpeg' ? 'jpg' : target}`;
-};
-
-const formatBytes = (bytes: number) => {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = bytes / 1024 ** index;
-  return `${value.toFixed(value < 10 ? 2 : 1)} ${units[index]}`;
-};
-
-const readQueryFormat = (value: string | null): Format | null => {
-  if (!value) return null;
-  const normalized = value.toLowerCase();
-  const map: Record<string, 'jpeg' | 'png' | 'webp'> = {
-    jpg: 'jpeg',
-    jpeg: 'jpeg',
-    png: 'png',
-    webp: 'webp',
-  };
-  return map[normalized] ?? null;
-};
-
-const getImageDimensions = async (file: File) => {
-  const bitmap = await createImageBitmap(file);
-  const width = bitmap.width;
-  const height = bitmap.height;
-  bitmap.close();
-  return { width, height };
-};
 
 const App = () => {
   const [wasmState, setWasmState] = useState<{
@@ -112,15 +71,6 @@ const App = () => {
       mounted = false;
     };
   }, []);
-
-  const outputCount = useMemo(
-    () => items.filter((item) => item.status === 'done' && item.output).length,
-    [items],
-  );
-  const queuedCount = useMemo(
-    () => items.filter((item) => item.status === 'queued').length,
-    [items],
-  );
 
   const handleFiles = (files: File[]) => {
     const accepted = files.filter((file) => file.size <= MAX_FILE_SIZE_BYTES);
@@ -276,6 +226,15 @@ const App = () => {
     const blob = await zip.generateAsync({ type: 'blob' });
     downloadBlob(blob, `converted-${Date.now()}.zip`);
   };
+
+  const outputCount = useMemo(
+    () => items.filter((item) => item.status === 'done' && item.output).length,
+    [items],
+  );
+  const queuedCount = useMemo(
+    () => items.filter((item) => item.status === 'queued').length,
+    [items],
+  );
 
   const stats = useMemo(() => {
     let original = 0;
