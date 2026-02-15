@@ -1,4 +1,4 @@
-import type { Format } from './types';
+import type { CompressionPreset, Format } from './types/images.types';
 
 const FORMAT_ALIASES: Record<string, Format> = {
   png: 'png',
@@ -58,3 +58,27 @@ export const getImageDimensions = async (file: File) => {
   bitmap.close();
   return { width, height };
 };
+
+export const compressionOptions: Record<
+  CompressionPreset,
+  { label: string; quality: number; lossless: boolean }
+> = {
+  lossless: { label: 'High quality (95%)', quality: 95, lossless: false },
+  sweet_spot: { label: 'Sweet spot (70%)', quality: 70, lossless: false },
+  lossy: { label: 'Lossy (45%)', quality: 45, lossless: false },
+};
+
+export const formatLabels: Record<Format, string> = {
+  webp: 'WebP',
+  png: 'PNG',
+  jpeg: 'JPEG',
+};
+
+export const mimeByFormat: Record<Format, string> = {
+  webp: 'image/webp',
+  png: 'image/png',
+  jpeg: 'image/jpeg',
+};
+
+export const knownFormats: Format[] = ['webp', 'png', 'jpeg'];
+export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;

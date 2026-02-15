@@ -4,8 +4,13 @@ import './App.css';
 import DropImagesSection from './components/DropImagesSection';
 import ImageFormatControls from './components/ImageFormatControls';
 import ProcessedItemsSection from './components/ProcessedItemsSection';
-import { compressionOptions, MAX_FILE_SIZE_BYTES, mimeByFormat } from './types';
-import type { ConversionSettings, ImageItem } from './types';
+import {
+  compressionOptions,
+  MAX_FILE_SIZE_BYTES,
+  mimeByFormat,
+} from './helpers';
+import type { ConversionSettings, ImageItem } from './types/images.types';
+import WasmWorkerPool from './workers/WasmWorkerPool';
 import {
   readQueryFormat,
   replaceExtension,
@@ -16,19 +21,8 @@ import {
 
 const CONVERSION_CONCURRENCY = 4;
 
-type ConvertImageWithOptions = (
-  input: Uint8Array,
-  target_format: string,
-  quality: number,
-  max_width: number,
-  max_height: number,
-  lossless: boolean,
-) => Uint8Array;
-
 const App = () => {
-  const convertImageWithOptionsRef = useRef<ConvertImageWithOptions | null>(
-    null,
-  );
+  const workerPoolRef = useRef<WasmWorkerPool | null>(null);
   const [wasmState, setWasmState] = useState<{
     ready: boolean;
     error: string | null;
@@ -60,14 +54,17 @@ const App = () => {
 
   useEffect(() => {
     let mounted = true;
-    const loadWasm = async () => {
-      try {
-        const wasmModule = await import('../wasm/pkg/image_wasm');
-        await wasmModule.default();
-        if (!mounted) return;
+    const workerPoolSize = Math.max(
+      1,
+      Math.min(CONVERSION_CONCURRENCY, navigator.hardwareConcurrency || 2),
+    );
+    const pool = new WasmWorkerPool(workerPoolSize);
+    workerPoolRef.current = pool;
 
-        convertImageWithOptionsRef.current =
-          wasmModule.convert_image_with_options;
+    const loadWorkers = async () => {
+      try {
+        await pool.init();
+        if (!mounted) return;
 
         setWasmState({
           ready: true,
@@ -81,10 +78,12 @@ const App = () => {
         });
       }
     };
-    loadWasm();
+    loadWorkers();
 
     return () => {
       mounted = false;
+      pool.destroy();
+      workerPoolRef.current = null;
     };
   }, []);
 
@@ -121,8 +120,8 @@ const App = () => {
   };
 
   const handleConvertAll = async () => {
-    const convertImageWithOptions = convertImageWithOptionsRef.current;
-    if (!wasmState.ready || !convertImageWithOptions || isConverting) return;
+    const workerPool = workerPoolRef.current;
+    if (!wasmState.ready || !workerPool || isConverting) return;
     const queuedItems = items.filter((item) => item.status === 'queued');
     if (!queuedItems.length) return;
 
@@ -153,18 +152,16 @@ const App = () => {
         }
 
         const buffer = await item.file.arrayBuffer();
-        const output = convertImageWithOptions(
-          new Uint8Array(buffer),
-          conversionSettings.targetFormat,
-          selectedCompression.quality,
-          targetWidth,
-          targetHeight,
-          selectedCompression.lossless,
-        );
-
-        const outputBytes = new Uint8Array(output.byteLength);
-        outputBytes.set(output);
-        const outputBlob = new Blob([outputBytes], {
+        const outputBytes = await workerPool.convert({
+          input: buffer,
+          targetFormat: conversionSettings.targetFormat,
+          quality: selectedCompression.quality,
+          maxWidth: targetWidth,
+          maxHeight: targetHeight,
+          lossless: selectedCompression.lossless,
+        });
+        const outputBuffer = outputBytes.slice().buffer;
+        const outputBlob = new Blob([outputBuffer], {
           type: mimeByFormat[conversionSettings.targetFormat],
         });
         const outputUrl = URL.createObjectURL(outputBlob);

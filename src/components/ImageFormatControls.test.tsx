@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ConversionSettings } from '../types';
+import type { ConversionSettings } from '../types/images.types';
 import ImageFormatControls from './ImageFormatControls';
 
 const baseSettings: ConversionSettings = {
@@ -64,4 +64,3 @@ describe('ImageFormatControls', () => {
     expect(resizedUpdater(baseSettings).resizePercent).toBe(80);
   });
 });
-

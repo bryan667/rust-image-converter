@@ -1,4 +1,4 @@
-import type { ImageItem } from '../types';
+import type { ImageItem } from '../types/images.types';
 
 type ProcessedItemsSectionProps = {
   items: ImageItem[];

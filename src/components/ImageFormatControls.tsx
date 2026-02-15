@@ -1,9 +1,8 @@
 import {
-  formatLabels,
-  knownFormats,
   type CompressionPreset,
   type ConversionSettings,
-} from '../types';
+} from '../types/images.types';
+import { formatLabels, knownFormats } from '../helpers';
 import type { Dispatch, SetStateAction } from 'react';
 
 type ImageFormatControlsProps = {
