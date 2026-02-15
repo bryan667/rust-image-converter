@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import JSZip from 'jszip';
 import pLimit from 'p-limit';
 import './App.css';
-import init, { convert_image_with_options } from '../wasm/pkg/image_wasm';
 import DropImagesSection from './components/DropImagesSection';
 import ImageFormatControls from './components/ImageFormatControls';
 import ProcessedItemsSection from './components/ProcessedItemsSection';
@@ -18,7 +17,19 @@ import {
 
 const CONVERSION_CONCURRENCY = 4;
 
+type ConvertImageWithOptions = (
+  input: Uint8Array,
+  target_format: string,
+  quality: number,
+  max_width: number,
+  max_height: number,
+  lossless: boolean,
+) => Uint8Array;
+
 const App = () => {
+  const convertImageWithOptionsRef = useRef<ConvertImageWithOptions | null>(
+    null,
+  );
   const [wasmState, setWasmState] = useState<{
     ready: boolean;
     error: string | null;
@@ -50,23 +61,29 @@ const App = () => {
 
   useEffect(() => {
     let mounted = true;
-    init()
-      .then(() => {
-        if (mounted) {
-          setWasmState({
-            ready: true,
-            error: null,
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        if (mounted) {
-          setWasmState({
-            ready: false,
-            error: String(error),
-          });
-        }
-      });
+    const loadWasm = async () => {
+      try {
+        const wasmModule = await import('../wasm/pkg/image_wasm');
+        await wasmModule.default();
+        if (!mounted) return;
+
+        convertImageWithOptionsRef.current =
+          wasmModule.convert_image_with_options;
+
+        setWasmState({
+          ready: true,
+          error: null,
+        });
+      } catch (error: unknown) {
+        if (!mounted) return;
+        setWasmState({
+          ready: false,
+          error: String(error),
+        });
+      }
+    };
+    loadWasm();
+
     return () => {
       mounted = false;
     };
@@ -105,7 +122,8 @@ const App = () => {
   };
 
   const handleConvertAll = async () => {
-    if (!wasmState.ready || isConverting) return;
+    const convertImageWithOptions = convertImageWithOptionsRef.current;
+    if (!wasmState.ready || !convertImageWithOptions || isConverting) return;
     const queuedItems = items.filter((item) => item.status === 'queued');
     if (!queuedItems.length) return;
 
@@ -136,7 +154,7 @@ const App = () => {
         }
 
         const buffer = await item.file.arrayBuffer();
-        const output = convert_image_with_options(
+        const output = convertImageWithOptions(
           new Uint8Array(buffer),
           conversionSettings.targetFormat,
           selectedCompression.quality,
