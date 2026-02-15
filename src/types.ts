@@ -27,7 +27,7 @@ export const compressionOptions: Record<
   CompressionPreset,
   { label: string; quality: number; lossless: boolean }
 > = {
-  lossless: { label: 'Lossless (95%)', quality: 95, lossless: true },
+  lossless: { label: 'High quality (95%)', quality: 95, lossless: false },
   sweet_spot: { label: 'Sweet spot (70%)', quality: 70, lossless: false },
   lossy: { label: 'Lossy (45%)', quality: 45, lossless: false },
 };
