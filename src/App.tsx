@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import pLimit from 'p-limit';
 import './App.css';
 import DropImagesSection from './components/DropImagesSection';
 import ImageFormatControls from './components/ImageFormatControls';
@@ -18,8 +17,6 @@ import {
   formatFromFile,
   getImageDimensions,
 } from './helpers';
-
-const CONVERSION_CONCURRENCY = 4;
 
 const App = () => {
   const workerPoolRef = useRef<WasmWorkerPool | null>(null);
@@ -56,7 +53,7 @@ const App = () => {
     let mounted = true;
     const workerPoolSize = Math.max(
       1,
-      Math.min(CONVERSION_CONCURRENCY, navigator.hardwareConcurrency || 1),
+      (navigator.hardwareConcurrency || 1) - 3,
     );
     const pool = new WasmWorkerPool(workerPoolSize);
     workerPoolRef.current = pool;
@@ -202,10 +199,7 @@ const App = () => {
     };
 
     try {
-      const limit = pLimit(CONVERSION_CONCURRENCY);
-      await Promise.all(
-        queuedItems.map((item) => limit(() => processItem(item))),
-      );
+      await Promise.all(queuedItems.map((item) => processItem(item)));
     } finally {
       setIsConverting(false);
     }
