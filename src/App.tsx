@@ -72,7 +72,7 @@ const App = () => {
     };
   }, []);
 
-  const handleFiles = (files: File[]) => {
+  const onFileSelect = (files: File[]) => {
     const accepted = files.filter((file) => file.size <= MAX_FILE_SIZE_BYTES);
     const rejected = files.filter((file) => file.size > MAX_FILE_SIZE_BYTES);
 
@@ -295,7 +295,7 @@ const App = () => {
       <DropImagesSection
         inputMessage={inputMessage}
         maxFileSizeLabel={formatBytes(MAX_FILE_SIZE_BYTES)}
-        onFileSelect={handleFiles}
+        onFileSelect={onFileSelect}
       />
 
       <section className="actions">

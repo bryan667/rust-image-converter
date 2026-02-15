@@ -36,6 +36,7 @@ export default function DropImagesSection({
           className: `drop-surface ${isDragActive ? 'dragging' : ''}`,
         })}
       >
+        <input {...getInputProps()} />
         <div>
           <strong>Drop images here</strong>
           <p>
@@ -44,10 +45,7 @@ export default function DropImagesSection({
           </p>
           {inputMessage && <p className="input-message">{inputMessage}</p>}
         </div>
-        <label className="file-button">
-          Select files
-          <input {...getInputProps()} />
-        </label>
+        <label className="file-button">Select files</label>
       </div>
     </section>
   );
