@@ -48,10 +48,13 @@ const formatBytes = (bytes: number) => {
 const readQueryFormat = (value: string | null): Format | null => {
   if (!value) return null;
   const normalized = value.toLowerCase();
-  if (normalized === 'jpg' || normalized === 'jpeg') return 'jpeg';
-  if (normalized === 'png') return 'png';
-  if (normalized === 'webp') return 'webp';
-  return null;
+  const map: Record<string, 'jpeg' | 'png' | 'webp'> = {
+    jpg: 'jpeg',
+    jpeg: 'jpeg',
+    png: 'png',
+    webp: 'webp',
+  };
+  return map[normalized] ?? null;
 };
 
 const getImageDimensions = async (file: File) => {
@@ -63,8 +66,13 @@ const getImageDimensions = async (file: File) => {
 };
 
 const App = () => {
-  const [wasmReady, setWasmReady] = useState(false);
-  const [wasmError, setWasmError] = useState<string | null>(null);
+  const [wasmState, setWasmState] = useState<{
+    ready: boolean;
+    error: string | null;
+  }>({
+    ready: false,
+    error: null,
+  });
   const [items, setItems] = useState<ImageItem[]>([]);
   const [targetFormat, setTargetFormat] = useState<Format>('webp');
   const [compressionPreset, setCompressionPreset] =
@@ -84,10 +92,20 @@ const App = () => {
     let mounted = true;
     init()
       .then(() => {
-        if (mounted) setWasmReady(true);
+        if (mounted) {
+          setWasmState({
+            ready: true,
+            error: null,
+          });
+        }
       })
       .catch((error: unknown) => {
-        if (mounted) setWasmError(String(error));
+        if (mounted) {
+          setWasmState({
+            ready: false,
+            error: String(error),
+          });
+        }
       });
     return () => {
       mounted = false;
@@ -136,7 +154,7 @@ const App = () => {
   };
 
   const handleConvertAll = async () => {
-    if (!wasmReady || isConverting) return;
+    if (!wasmState.ready || isConverting) return;
     const queuedItems = items.filter((item) => item.status === 'queued');
     if (!queuedItems.length) return;
 
@@ -144,76 +162,78 @@ const App = () => {
     const selectedCompression = compressionOptions[compressionPreset];
     const normalizedPercent = Math.min(100, Math.max(1, resizePercent));
     const processItem = async (item: ImageItem) => {
+      setItems((prev) =>
+        prev.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, status: 'processing', error: undefined }
+            : entry,
+        ),
+      );
+
+      try {
+        let targetWidth = 0;
+        let targetHeight = 0;
+        if (resizeEnabled && normalizedPercent < 100) {
+          const { width, height } = await getImageDimensions(item.file);
+          const scale = normalizedPercent / 100;
+          targetWidth = Math.max(1, Math.round(width * scale));
+          targetHeight = Math.max(1, Math.round(height * scale));
+        }
+
+        const buffer = await item.file.arrayBuffer();
+        const output = convert_image_with_options(
+          new Uint8Array(buffer),
+          targetFormat,
+          selectedCompression.quality,
+          targetWidth,
+          targetHeight,
+          selectedCompression.lossless,
+        );
+
+        const outputBytes = new Uint8Array(output.byteLength);
+        outputBytes.set(output);
+        const outputBlob = new Blob([outputBytes], {
+          type: mimeByFormat[targetFormat],
+        });
+        const outputUrl = URL.createObjectURL(outputBlob);
+        const outputName = replaceExtension(item.file.name, targetFormat);
+
         setItems((prev) =>
           prev.map((entry) =>
             entry.id === item.id
-              ? { ...entry, status: 'processing', error: undefined }
+              ? {
+                  ...entry,
+                  status: 'done',
+                  output: {
+                    blob: outputBlob,
+                    url: outputUrl,
+                    size: outputBlob.size,
+                    name: outputName,
+                  },
+                }
               : entry,
           ),
         );
-
-        try {
-          let targetWidth = 0;
-          let targetHeight = 0;
-          if (resizeEnabled && normalizedPercent < 100) {
-            const { width, height } = await getImageDimensions(item.file);
-            const scale = normalizedPercent / 100;
-            targetWidth = Math.max(1, Math.round(width * scale));
-            targetHeight = Math.max(1, Math.round(height * scale));
-          }
-
-          const buffer = await item.file.arrayBuffer();
-          const output = convert_image_with_options(
-            new Uint8Array(buffer),
-            targetFormat,
-            selectedCompression.quality,
-            targetWidth,
-            targetHeight,
-            selectedCompression.lossless,
-          );
-
-          const outputBytes = new Uint8Array(output.byteLength);
-          outputBytes.set(output);
-          const outputBlob = new Blob([outputBytes], {
-            type: mimeByFormat[targetFormat],
-          });
-          const outputUrl = URL.createObjectURL(outputBlob);
-          const outputName = replaceExtension(item.file.name, targetFormat);
-
-          setItems((prev) =>
-            prev.map((entry) =>
-              entry.id === item.id
-                ? {
-                    ...entry,
-                    status: 'done',
-                    output: {
-                      blob: outputBlob,
-                      url: outputUrl,
-                      size: outputBlob.size,
-                      name: outputName,
-                    },
-                  }
-                : entry,
-            ),
-          );
-        } catch (error) {
-          setItems((prev) =>
-            prev.map((entry) =>
-              entry.id === item.id
-                ? {
-                    ...entry,
-                    status: 'error',
-                    error: `Conversion failed: ${String(error)}`,
-                  }
-                : entry,
-            ),
-          );
-        }
-      };
+      } catch (error) {
+        setItems((prev) =>
+          prev.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  status: 'error',
+                  error: `Conversion failed: ${String(error)}`,
+                }
+              : entry,
+          ),
+        );
+      }
+    };
 
     try {
       const limit = pLimit(CONVERSION_CONCURRENCY);
-      await Promise.all(queuedItems.map((item) => limit(() => processItem(item))));
+      await Promise.all(
+        queuedItems.map((item) => limit(() => processItem(item))),
+      );
     } finally {
       setIsConverting(false);
     }
@@ -271,12 +291,14 @@ const App = () => {
         </div>
         <div className="status-card">
           <div
-            className={`status-indicator ${wasmReady ? 'ready' : 'loading'}`}
+            className={`status-indicator ${wasmState.ready ? 'ready' : 'loading'}`}
           />
           <div>
-            <strong>{wasmReady ? 'WASM ready' : 'Loading WASM...'}</strong>
+            <strong>{wasmState.ready ? 'WASM ready' : 'Loading WASM...'}</strong>
             <span>
-              {wasmError ? wasmError : 'All processing stays on your device.'}
+              {wasmState.error
+                ? wasmState.error
+                : 'All processing stays on your device.'}
             </span>
           </div>
         </div>
@@ -328,16 +350,22 @@ const App = () => {
         <div className="action-buttons">
           <button
             onClick={handleConvertAll}
-            disabled={!queuedCount || !wasmReady || isConverting}
+            disabled={!queuedCount || !wasmState.ready || isConverting}
           >
             {isConverting
               ? 'Converting...'
               : `Convert ${queuedCount ? `(${queuedCount})` : ''}`}
           </button>
-          <button onClick={downloadAllZip} disabled={!outputCount}>
+          <button
+            onClick={downloadAllZip}
+            disabled={!outputCount || !wasmReady || isConverting}
+          >
             Download ZIP
           </button>
-          <button onClick={handleClear} disabled={!items.length}>
+          <button
+            onClick={handleClear}
+            disabled={!items.length || isConverting}
+          >
             Clear
           </button>
         </div>
@@ -347,6 +375,7 @@ const App = () => {
         items={items}
         formatBytes={formatBytes}
         onDownload={downloadBlob}
+        isConverting={isConverting}
       />
       {isConverting ? (
         <div className="converting-overlay" aria-live="polite">

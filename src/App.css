@@ -174,8 +174,6 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(8, 11, 10, 0.45);
-  backdrop-filter: blur(2px);
   z-index: 50;
 }
 
@@ -273,6 +271,9 @@
 
 .card-body {
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .card-title {
@@ -286,6 +287,11 @@
   font-size: 0.95rem;
 }
 
+.badge-group {
+  display: flex;
+  gap: 8px;
+}
+
 .badge {
   background: rgba(181, 245, 207, 0.2);
   color: #b5f5cf;
@@ -294,6 +300,11 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.badge.output {
+  background: rgba(250, 204, 21, 0.2);
+  color: #fde68a;
 }
 
 .meta {
@@ -337,7 +348,8 @@
 }
 
 .card-actions {
-  margin-top: 14px;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .empty {
