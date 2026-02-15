@@ -56,7 +56,7 @@ const App = () => {
     let mounted = true;
     const workerPoolSize = Math.max(
       1,
-      Math.min(CONVERSION_CONCURRENCY, navigator.hardwareConcurrency || 2),
+      Math.min(CONVERSION_CONCURRENCY, navigator.hardwareConcurrency || 1),
     );
     const pool = new WasmWorkerPool(workerPoolSize);
     workerPoolRef.current = pool;
