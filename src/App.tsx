@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import JSZip from 'jszip';
 import pLimit from 'p-limit';
 import './App.css';
 import DropImagesSection from './components/DropImagesSection';
@@ -234,6 +233,7 @@ const App = () => {
   };
 
   const downloadAllZip = async () => {
+    const { default: JSZip } = await import('jszip');
     const doneItems = items.filter(
       (
         item,
