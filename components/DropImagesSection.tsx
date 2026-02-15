@@ -42,7 +42,7 @@ export default function DropImagesSection({
             or select files from your computer. Supported: JPG, PNG, WebP. Max
             file size: {maxFileSizeLabel} each.
           </p>
-          {inputMessage ? <p className="input-message">{inputMessage}</p> : null}
+          {inputMessage && <p className="input-message">{inputMessage}</p>}
         </div>
         <label className="file-button">
           Select files

@@ -1,32 +1,32 @@
-import type { CompressionPreset, Format } from '../src/types';
+import {
+  formatLabels,
+  knownFormats,
+  type CompressionPreset,
+  type ConversionSettings,
+} from '../src/types';
+import type { Dispatch, SetStateAction } from 'react';
 
 type ImageFormatControlsProps = {
-  targetFormat: Format;
-  compressionPreset: CompressionPreset;
-  resizeEnabled: boolean;
-  resizePercent: number;
-  knownFormats: Format[];
-  formatLabels: Record<Format, string>;
+  conversionSettings: ConversionSettings;
+  setConversionSettings: Dispatch<SetStateAction<ConversionSettings>>;
   compressionLabels: Record<CompressionPreset, string>;
-  onTargetFormatChange: (value: Format) => void;
-  onCompressionPresetChange: (value: CompressionPreset) => void;
-  onResizeEnabledChange: (value: boolean) => void;
-  onResizePercentChange: (value: number) => void;
 };
 
 export default function ImageFormatControls({
-  targetFormat,
-  compressionPreset,
-  resizeEnabled,
-  resizePercent,
-  knownFormats,
-  formatLabels,
+  conversionSettings,
+  setConversionSettings,
   compressionLabels,
-  onTargetFormatChange,
-  onCompressionPresetChange,
-  onResizeEnabledChange,
-  onResizePercentChange,
 }: ImageFormatControlsProps) {
+  const updateSetting = <K extends keyof ConversionSettings>(
+    key: K,
+    value: ConversionSettings[K],
+  ) => {
+    setConversionSettings((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
   return (
     <section className="controls">
       <div className="control-block">
@@ -43,8 +43,10 @@ export default function ImageFormatControls({
           {knownFormats.map((format) => (
             <button
               key={format}
-              className={targetFormat === format ? 'active' : ''}
-              onClick={() => onTargetFormatChange(format)}
+              className={
+                conversionSettings.targetFormat === format ? 'active' : ''
+              }
+              onClick={() => updateSetting('targetFormat', format)}
             >
               {formatLabels[format]}
             </button>
@@ -56,20 +58,30 @@ export default function ImageFormatControls({
         <label>Compression</label>
         <div className="toggle-row">
           <button
-            className={compressionPreset === 'lossless' ? 'active' : ''}
-            onClick={() => onCompressionPresetChange('lossless')}
+            className={
+              conversionSettings.compressionPreset === 'lossless'
+                ? 'active'
+                : ''
+            }
+            onClick={() => updateSetting('compressionPreset', 'lossless')}
           >
             {compressionLabels.lossless}
           </button>
           <button
-            className={compressionPreset === 'sweet_spot' ? 'active' : ''}
-            onClick={() => onCompressionPresetChange('sweet_spot')}
+            className={
+              conversionSettings.compressionPreset === 'sweet_spot'
+                ? 'active'
+                : ''
+            }
+            onClick={() => updateSetting('compressionPreset', 'sweet_spot')}
           >
             {compressionLabels.sweet_spot}
           </button>
           <button
-            className={compressionPreset === 'lossy' ? 'active' : ''}
-            onClick={() => onCompressionPresetChange('lossy')}
+            className={
+              conversionSettings.compressionPreset === 'lossy' ? 'active' : ''
+            }
+            onClick={() => updateSetting('compressionPreset', 'lossy')}
           >
             {compressionLabels.lossy}
           </button>
@@ -83,20 +95,22 @@ export default function ImageFormatControls({
         <label>Resize (optional, %)</label>
         <div className="resize-row">
           <button
-            className={resizeEnabled ? 'active' : ''}
-            onClick={() => onResizeEnabledChange(!resizeEnabled)}
+            className={conversionSettings.resizeEnabled ? 'active' : ''}
+            onClick={() =>
+              updateSetting('resizeEnabled', !conversionSettings.resizeEnabled)
+            }
           >
-            {resizeEnabled ? 'On' : 'Off'}
+            {conversionSettings.resizeEnabled ? 'On' : 'Off'}
           </button>
           <input
             type="number"
             min={1}
             max={100}
-            value={resizePercent}
+            value={conversionSettings.resizePercent}
             onChange={(event) =>
-              onResizePercentChange(Number(event.target.value))
+              updateSetting('resizePercent', Number(event.target.value))
             }
-            disabled={!resizeEnabled}
+            disabled={!conversionSettings.resizeEnabled}
             aria-label="Resize percentage"
           />
           <span>%</span>

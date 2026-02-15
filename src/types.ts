@@ -1,6 +1,12 @@
 export type Format = 'webp' | 'png' | 'jpeg';
 export type CompressionPreset = 'lossless' | 'sweet_spot' | 'lossy';
 export type ConvertStatus = 'queued' | 'processing' | 'done' | 'error' | 'skipped';
+export type ConversionSettings = {
+  targetFormat: Format;
+  compressionPreset: CompressionPreset;
+  resizeEnabled: boolean;
+  resizePercent: number;
+};
 
 export type ImageItem = {
   id: string;

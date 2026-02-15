@@ -6,14 +6,8 @@ import init, { convert_image_with_options } from '../wasm/pkg/image_wasm';
 import DropImagesSection from '../components/DropImagesSection';
 import ImageFormatControls from '../components/ImageFormatControls';
 import ProcessedItemsSection from '../components/ProcessedItemsSection';
-import {
-  compressionOptions,
-  formatLabels,
-  knownFormats,
-  MAX_FILE_SIZE_BYTES,
-  mimeByFormat,
-} from './types';
-import type { CompressionPreset, Format, ImageItem } from './types';
+import { compressionOptions, MAX_FILE_SIZE_BYTES, mimeByFormat } from './types';
+import type { ConversionSettings, Format, ImageItem } from './types';
 
 const CONVERSION_CONCURRENCY = 4;
 
@@ -74,18 +68,25 @@ const App = () => {
     error: null,
   });
   const [items, setItems] = useState<ImageItem[]>([]);
-  const [targetFormat, setTargetFormat] = useState<Format>('webp');
-  const [compressionPreset, setCompressionPreset] =
-    useState<CompressionPreset>('sweet_spot');
-  const [resizeEnabled, setResizeEnabled] = useState(false);
-  const [resizePercent, setResizePercent] = useState(100);
+  const [conversionSettings, setConversionSettings] =
+    useState<ConversionSettings>({
+      targetFormat: 'webp',
+      compressionPreset: 'sweet_spot',
+      resizeEnabled: false,
+      resizePercent: 100,
+    });
   const [inputMessage, setInputMessage] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
     const to = readQueryFormat(search.get('to'));
-    if (to) setTargetFormat(to);
+    if (to) {
+      setConversionSettings((prev) => ({
+        ...prev,
+        targetFormat: to,
+      }));
+    }
   }, []);
 
   useEffect(() => {
@@ -159,8 +160,12 @@ const App = () => {
     if (!queuedItems.length) return;
 
     setIsConverting(true);
-    const selectedCompression = compressionOptions[compressionPreset];
-    const normalizedPercent = Math.min(100, Math.max(1, resizePercent));
+    const selectedCompression =
+      compressionOptions[conversionSettings.compressionPreset];
+    const normalizedPercent = Math.min(
+      100,
+      Math.max(1, conversionSettings.resizePercent),
+    );
     const processItem = async (item: ImageItem) => {
       setItems((prev) =>
         prev.map((entry) =>
@@ -173,7 +178,7 @@ const App = () => {
       try {
         let targetWidth = 0;
         let targetHeight = 0;
-        if (resizeEnabled && normalizedPercent < 100) {
+        if (conversionSettings.resizeEnabled && normalizedPercent < 100) {
           const { width, height } = await getImageDimensions(item.file);
           const scale = normalizedPercent / 100;
           targetWidth = Math.max(1, Math.round(width * scale));
@@ -183,7 +188,7 @@ const App = () => {
         const buffer = await item.file.arrayBuffer();
         const output = convert_image_with_options(
           new Uint8Array(buffer),
-          targetFormat,
+          conversionSettings.targetFormat,
           selectedCompression.quality,
           targetWidth,
           targetHeight,
@@ -193,10 +198,13 @@ const App = () => {
         const outputBytes = new Uint8Array(output.byteLength);
         outputBytes.set(output);
         const outputBlob = new Blob([outputBytes], {
-          type: mimeByFormat[targetFormat],
+          type: mimeByFormat[conversionSettings.targetFormat],
         });
         const outputUrl = URL.createObjectURL(outputBlob);
-        const outputName = replaceExtension(item.file.name, targetFormat);
+        const outputName = replaceExtension(
+          item.file.name,
+          conversionSettings.targetFormat,
+        );
 
         setItems((prev) =>
           prev.map((entry) =>
@@ -294,7 +302,9 @@ const App = () => {
             className={`status-indicator ${wasmState.ready ? 'ready' : 'loading'}`}
           />
           <div>
-            <strong>{wasmState.ready ? 'WASM ready' : 'Loading WASM...'}</strong>
+            <strong>
+              {wasmState.ready ? 'WASM ready' : 'Loading WASM...'}
+            </strong>
             <span>
               {wasmState.error
                 ? wasmState.error
@@ -305,21 +315,13 @@ const App = () => {
       </header>
 
       <ImageFormatControls
-        targetFormat={targetFormat}
-        compressionPreset={compressionPreset}
-        resizeEnabled={resizeEnabled}
-        resizePercent={resizePercent}
-        knownFormats={knownFormats}
-        formatLabels={formatLabels}
+        conversionSettings={conversionSettings}
+        setConversionSettings={setConversionSettings}
         compressionLabels={{
           lossless: compressionOptions.lossless.label,
           sweet_spot: compressionOptions.sweet_spot.label,
           lossy: compressionOptions.lossy.label,
         }}
-        onTargetFormatChange={setTargetFormat}
-        onCompressionPresetChange={setCompressionPreset}
-        onResizeEnabledChange={setResizeEnabled}
-        onResizePercentChange={setResizePercent}
       />
 
       <DropImagesSection
@@ -358,7 +360,7 @@ const App = () => {
           </button>
           <button
             onClick={downloadAllZip}
-            disabled={!outputCount || !wasmReady || isConverting}
+            disabled={!outputCount || !wasmState.ready || isConverting}
           >
             Download ZIP
           </button>
