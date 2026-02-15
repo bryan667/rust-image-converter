@@ -217,14 +217,16 @@ const App = () => {
 
   const downloadAllZip = async () => {
     const doneItems = items.filter(
-      (item): item is ImageItem & { output: NonNullable<ImageItem['output']> } =>
+      (
+        item,
+      ): item is ImageItem & { output: NonNullable<ImageItem['output']> } =>
         item.status === 'done' && Boolean(item.output),
     );
     if (!doneItems.length) return;
 
     const zip = new JSZip();
-    doneItems.forEach((item) => {
-      zip.file(item.output.name, item.output.blob);
+    doneItems.forEach((item, index) => {
+      zip.file(`${item.output.name}-${index}`, item.output.blob);
     });
     const blob = await zip.generateAsync({ type: 'blob' });
     downloadBlob(blob, `converted-${Date.now()}.zip`);
