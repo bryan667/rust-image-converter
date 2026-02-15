@@ -226,7 +226,7 @@ const App = () => {
 
     const zip = new JSZip();
     doneItems.forEach((item, index) => {
-      zip.file(`${item.output.name}-${index}`, item.output.blob);
+      zip.file(`${index}-${item.output.name}`, item.output.blob);
     });
     const blob = await zip.generateAsync({ type: 'blob' });
     downloadBlob(blob, `converted-${Date.now()}.zip`);
