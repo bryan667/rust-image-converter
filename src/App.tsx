@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
+import pLimit from 'p-limit';
 import './App.css';
 import init, { convert_image_with_options } from '../wasm/pkg/image_wasm';
 import DropImagesSection from '../components/DropImagesSection';
@@ -11,12 +12,10 @@ import {
   knownFormats,
   MAX_FILE_SIZE_BYTES,
   mimeByFormat,
-} from './imageConverterTypes';
-import type {
-  CompressionPreset,
-  Format,
-  ImageItem,
-} from './imageConverterTypes';
+} from './types';
+import type { CompressionPreset, Format, ImageItem } from './types';
+
+const CONVERSION_CONCURRENCY = 4;
 
 const formatFromFile = (file: File): Format | 'unknown' => {
   const type = file.type.toLowerCase();
@@ -68,18 +67,16 @@ const App = () => {
   const [wasmError, setWasmError] = useState<string | null>(null);
   const [items, setItems] = useState<ImageItem[]>([]);
   const [targetFormat, setTargetFormat] = useState<Format>('webp');
-  const [sourceFilter, setSourceFilter] = useState<Format | 'any'>('any');
   const [compressionPreset, setCompressionPreset] =
     useState<CompressionPreset>('sweet_spot');
   const [resizeEnabled, setResizeEnabled] = useState(false);
   const [resizePercent, setResizePercent] = useState(100);
   const [inputMessage, setInputMessage] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
-    const from = readQueryFormat(search.get('from'));
     const to = readQueryFormat(search.get('to'));
-    if (from) setSourceFilter(from);
     if (to) setTargetFormat(to);
   }, []);
 
@@ -139,91 +136,86 @@ const App = () => {
   };
 
   const handleConvertAll = async () => {
-    if (!wasmReady) return;
+    if (!wasmReady || isConverting) return;
+    const queuedItems = items.filter((item) => item.status === 'queued');
+    if (!queuedItems.length) return;
+
+    setIsConverting(true);
     const selectedCompression = compressionOptions[compressionPreset];
     const normalizedPercent = Math.min(100, Math.max(1, resizePercent));
-
-    for (const item of items) {
-      if (item.status !== 'queued') continue;
-      if (sourceFilter !== 'any' && item.sourceFormat !== sourceFilter) {
+    const processItem = async (item: ImageItem) => {
         setItems((prev) =>
           prev.map((entry) =>
             entry.id === item.id
-              ? {
-                  ...entry,
-                  status: 'skipped',
-                  error: 'Skipped (format mismatch).',
-                }
+              ? { ...entry, status: 'processing', error: undefined }
               : entry,
           ),
         );
-        continue;
-      }
-      setItems((prev) =>
-        prev.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, status: 'processing', error: undefined }
-            : entry,
-        ),
-      );
 
-      try {
-        let targetWidth = 0;
-        let targetHeight = 0;
-        if (resizeEnabled && normalizedPercent < 100) {
-          const { width, height } = await getImageDimensions(item.file);
-          const scale = normalizedPercent / 100;
-          targetWidth = Math.max(1, Math.round(width * scale));
-          targetHeight = Math.max(1, Math.round(height * scale));
+        try {
+          let targetWidth = 0;
+          let targetHeight = 0;
+          if (resizeEnabled && normalizedPercent < 100) {
+            const { width, height } = await getImageDimensions(item.file);
+            const scale = normalizedPercent / 100;
+            targetWidth = Math.max(1, Math.round(width * scale));
+            targetHeight = Math.max(1, Math.round(height * scale));
+          }
+
+          const buffer = await item.file.arrayBuffer();
+          const output = convert_image_with_options(
+            new Uint8Array(buffer),
+            targetFormat,
+            selectedCompression.quality,
+            targetWidth,
+            targetHeight,
+            selectedCompression.lossless,
+          );
+
+          const outputBytes = new Uint8Array(output.byteLength);
+          outputBytes.set(output);
+          const outputBlob = new Blob([outputBytes], {
+            type: mimeByFormat[targetFormat],
+          });
+          const outputUrl = URL.createObjectURL(outputBlob);
+          const outputName = replaceExtension(item.file.name, targetFormat);
+
+          setItems((prev) =>
+            prev.map((entry) =>
+              entry.id === item.id
+                ? {
+                    ...entry,
+                    status: 'done',
+                    output: {
+                      blob: outputBlob,
+                      url: outputUrl,
+                      size: outputBlob.size,
+                      name: outputName,
+                    },
+                  }
+                : entry,
+            ),
+          );
+        } catch (error) {
+          setItems((prev) =>
+            prev.map((entry) =>
+              entry.id === item.id
+                ? {
+                    ...entry,
+                    status: 'error',
+                    error: `Conversion failed: ${String(error)}`,
+                  }
+                : entry,
+            ),
+          );
         }
+      };
 
-        const buffer = await item.file.arrayBuffer();
-        const output = convert_image_with_options(
-          new Uint8Array(buffer),
-          targetFormat,
-          selectedCompression.quality,
-          targetWidth,
-          targetHeight,
-          selectedCompression.lossless,
-        );
-
-        const outputBytes = new Uint8Array(output.byteLength);
-        outputBytes.set(output);
-        const outputBlob = new Blob([outputBytes], {
-          type: mimeByFormat[targetFormat],
-        });
-        const outputUrl = URL.createObjectURL(outputBlob);
-        const outputName = replaceExtension(item.file.name, targetFormat);
-
-        setItems((prev) =>
-          prev.map((entry) =>
-            entry.id === item.id
-              ? {
-                  ...entry,
-                  status: 'done',
-                  output: {
-                    blob: outputBlob,
-                    url: outputUrl,
-                    size: outputBlob.size,
-                    name: outputName,
-                  },
-                }
-              : entry,
-          ),
-        );
-      } catch (error) {
-        setItems((prev) =>
-          prev.map((entry) =>
-            entry.id === item.id
-              ? {
-                  ...entry,
-                  status: 'error',
-                  error: `Conversion failed: ${String(error)}`,
-                }
-              : entry,
-          ),
-        );
-      }
+    try {
+      const limit = pLimit(CONVERSION_CONCURRENCY);
+      await Promise.all(queuedItems.map((item) => limit(() => processItem(item))));
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -291,7 +283,6 @@ const App = () => {
       </header>
 
       <ImageFormatControls
-        sourceFilter={sourceFilter}
         targetFormat={targetFormat}
         compressionPreset={compressionPreset}
         resizeEnabled={resizeEnabled}
@@ -303,7 +294,6 @@ const App = () => {
           sweet_spot: compressionOptions.sweet_spot.label,
           lossy: compressionOptions.lossy.label,
         }}
-        onSourceFilterChange={setSourceFilter}
         onTargetFormatChange={setTargetFormat}
         onCompressionPresetChange={setCompressionPreset}
         onResizeEnabledChange={setResizeEnabled}
@@ -338,9 +328,11 @@ const App = () => {
         <div className="action-buttons">
           <button
             onClick={handleConvertAll}
-            disabled={!queuedCount || !wasmReady}
+            disabled={!queuedCount || !wasmReady || isConverting}
           >
-            Convert {queuedCount ? `(${queuedCount})` : ''}
+            {isConverting
+              ? 'Converting...'
+              : `Convert ${queuedCount ? `(${queuedCount})` : ''}`}
           </button>
           <button onClick={downloadAllZip} disabled={!outputCount}>
             Download ZIP
@@ -356,6 +348,11 @@ const App = () => {
         formatBytes={formatBytes}
         onDownload={downloadBlob}
       />
+      {isConverting ? (
+        <div className="converting-overlay" aria-live="polite">
+          <div className="spinner" aria-hidden="true" />
+        </div>
+      ) : null}
     </div>
   );
 };

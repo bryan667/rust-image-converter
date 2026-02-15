@@ -1,4 +1,4 @@
-import type { ImageItem } from '../src/imageConverterTypes';
+import type { ImageItem } from '../src/types';
 
 type ProcessedItemsSectionProps = {
   items: ImageItem[];
@@ -52,7 +52,9 @@ export default function ProcessedItemsSection({
       {!items.length ? (
         <div className="empty">
           <h3>Nothing here yet</h3>
-          <p>Add images to start converting. Everything stays in your browser.</p>
+          <p>
+            Add images to start converting. Everything stays in your browser.
+          </p>
         </div>
       ) : null}
     </section>

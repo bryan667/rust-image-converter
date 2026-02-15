@@ -1,7 +1,6 @@
-import type { CompressionPreset, Format } from '../src/imageConverterTypes';
+import type { CompressionPreset, Format } from '../src/types';
 
 type ImageFormatControlsProps = {
-  sourceFilter: Format | 'any';
   targetFormat: Format;
   compressionPreset: CompressionPreset;
   resizeEnabled: boolean;
@@ -9,7 +8,6 @@ type ImageFormatControlsProps = {
   knownFormats: Format[];
   formatLabels: Record<Format, string>;
   compressionLabels: Record<CompressionPreset, string>;
-  onSourceFilterChange: (value: Format | 'any') => void;
   onTargetFormatChange: (value: Format) => void;
   onCompressionPresetChange: (value: CompressionPreset) => void;
   onResizeEnabledChange: (value: boolean) => void;
@@ -17,7 +15,6 @@ type ImageFormatControlsProps = {
 };
 
 export default function ImageFormatControls({
-  sourceFilter,
   targetFormat,
   compressionPreset,
   resizeEnabled,
@@ -25,7 +22,6 @@ export default function ImageFormatControls({
   knownFormats,
   formatLabels,
   compressionLabels,
-  onSourceFilterChange,
   onTargetFormatChange,
   onCompressionPresetChange,
   onResizeEnabledChange,
@@ -36,22 +32,9 @@ export default function ImageFormatControls({
       <div className="control-block">
         <label>Source format</label>
         <div className="pill-group">
-          <button
-            className={sourceFilter === 'any' ? 'active' : ''}
-            onClick={() => onSourceFilterChange('any')}
-          >
-            Any
-          </button>
-          {knownFormats.map((format) => (
-            <button
-              key={format}
-              className={sourceFilter === format ? 'active' : ''}
-              onClick={() => onSourceFilterChange(format)}
-            >
-              {formatLabels[format]}
-            </button>
-          ))}
+          <button className="active">Any</button>
         </div>
+        <small>Supported formats are WebP, PNG, JPG.</small>
       </div>
 
       <div className="control-block">
@@ -110,7 +93,9 @@ export default function ImageFormatControls({
             min={1}
             max={100}
             value={resizePercent}
-            onChange={(event) => onResizePercentChange(Number(event.target.value))}
+            onChange={(event) =>
+              onResizePercentChange(Number(event.target.value))
+            }
             disabled={!resizeEnabled}
             aria-label="Resize percentage"
           />

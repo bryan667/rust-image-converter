@@ -169,6 +169,31 @@
   font-size: 0.9rem;
 }
 
+.converting-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 11, 10, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 50;
+}
+
+.spinner {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 4px solid rgba(181, 245, 207, 0.25);
+  border-top-color: #b5f5cf;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .actions {
   margin-top: 28px;
   display: flex;
