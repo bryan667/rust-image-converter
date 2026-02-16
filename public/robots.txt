@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rust-image-converter.vercel.app/sitemap.xml
+

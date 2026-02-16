@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "preview": "vite preview",
+    "toolchain:setup": "node scripts/setup-toolchain.mjs",
     "wasm:build": "node scripts/wasm-build.mjs && node scripts/prepare-wasm-pkg.mjs",
     "release:local": "npm run build && npm run lint && npm run test:run"
   },

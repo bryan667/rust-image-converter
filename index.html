@@ -3,15 +3,51 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/rust-1-32.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Space+Grotesk:wght@400;500;600&display=swap"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rust Image Converter</title>
+    <meta
+      name="description"
+      content="Convert and compress WebP, PNG, and JPEG images fully in-browser with Rust + WASM. No uploads, fast processing, and SEO-friendly output sizes."
+    />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#0f1412" />
+    <link rel="canonical" href="https://rust-image-converter.vercel.app/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Rust Image Converter" />
+    <meta
+      property="og:description"
+      content="Client-side image conversion and compression powered by Rust + WASM."
+    />
+    <meta property="og:url" content="https://rust-image-converter.vercel.app/" />
+    <meta
+      property="og:image"
+      content="https://rust-image-converter.vercel.app/rust-1-32.png"
+    />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Rust Image Converter" />
+    <meta
+      name="twitter:description"
+      content="Convert and compress images in-browser with Rust + WASM."
+    />
+    <meta
+      name="twitter:image"
+      content="https://rust-image-converter.vercel.app/rust-1-32.png"
+    />
+
+    <title>Rust Image Converter - Client-side WebP/PNG/JPEG Compression</title>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      Rust Image Converter requires JavaScript to run image processing in your browser.
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

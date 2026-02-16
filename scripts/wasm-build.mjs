@@ -7,15 +7,28 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
-const wasiSdkRoot = path.join(repoRoot, 'tools', 'wasi-sdk-30.0-x86_64-windows');
+const wasiTargetByPlatform = {
+  win32: 'x86_64-windows',
+  linux: process.arch === 'arm64' ? 'arm64-linux' : 'x86_64-linux',
+  darwin: process.arch === 'arm64' ? 'arm64-macos' : 'x86_64-macos',
+};
+
+const wasiTarget = wasiTargetByPlatform[process.platform];
+if (!wasiTarget) {
+  console.error(`Unsupported platform: ${process.platform}`);
+  process.exit(1);
+}
+
+const wasiSdkRoot = path.join(repoRoot, 'tools', `wasi-sdk-30.0-${wasiTarget}`);
 const wasiBin = path.join(wasiSdkRoot, 'bin');
-const clangPath = path.join(wasiBin, 'clang.exe');
-const arPath = path.join(wasiBin, 'llvm-ar.exe');
+const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+const clangPath = path.join(wasiBin, `clang${exeSuffix}`);
+const arPath = path.join(wasiBin, `llvm-ar${exeSuffix}`);
 const sysrootPath = path.join(wasiSdkRoot, 'share', 'wasi-sysroot');
 
 if (!existsSync(clangPath)) {
   console.error(`Missing clang at ${clangPath}`);
-  console.error('Install/extract wasi-sdk into tools/ before running wasm build.');
+  console.error('Run `npm run toolchain:setup` before `npm run wasm:build`.');
   process.exit(1);
 }
 
