@@ -272,7 +272,21 @@ const App = () => {
         <div>
           <span className="eyebrow">Client-side Rust + WASM</span>
           <h1>Web Image Converter</h1>
-          <p>Convert images entirely in your browser, client side only.</p>
+          <p>
+            <span>
+              Convert images entirely in your browser, client side only.
+            </span>
+            &nbsp;
+            <span>
+              <a
+                href="https://github.com/bryan667/rust-image-converter"
+                target="_blank"
+                style={{ color: '#b5f5cf' }}
+              >
+                Git
+              </a>
+            </span>
+          </p>
         </div>
         <div className="status-card">
           <div

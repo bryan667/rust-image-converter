@@ -7,38 +7,44 @@ import type {
 
 let convertImageWithOptions: ConvertImageWithOptions | null = null;
 let initialized = false;
+
 const workerScope = self as unknown as WorkerScope;
 
 workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   const message = event.data;
 
   if (message.type === 'init') {
-    if (initialized) {
-      workerScope.postMessage({ type: 'ready' } satisfies WorkerResponse);
-      return;
-    }
-
-    try {
-      const wasmModule = await import('../../wasm/pkg/image_wasm');
-      await wasmModule.default();
-      convertImageWithOptions = wasmModule.convert_image_with_options;
-      initialized = true;
-      workerScope.postMessage({ type: 'ready' } satisfies WorkerResponse);
-    } catch (error: unknown) {
-      workerScope.postMessage({
-        type: 'error',
-        error: String(error),
-      } satisfies WorkerResponse);
-    }
+    await handleInit();
     return;
   }
 
+  await handleConvert(message);
+};
+
+async function handleInit() {
+  if (initialized) {
+    postReady();
+    return;
+  }
+
+  try {
+    const wasmModule = await import('../../wasm/pkg/image_wasm');
+    await wasmModule.default();
+
+    convertImageWithOptions = wasmModule.convert_image_with_options;
+    initialized = true;
+
+    postReady();
+  } catch (error: unknown) {
+    postError(String(error));
+  }
+}
+
+async function handleConvert(message: WorkerRequest) {
+  if (message.type !== 'convert') return;
+
   if (!initialized || !convertImageWithOptions) {
-    workerScope.postMessage({
-      type: 'error',
-      requestId: message.requestId,
-      error: 'Worker is not initialized',
-    } satisfies WorkerResponse);
+    postError('Worker is not initialized', message.requestId);
     return;
   }
 
@@ -54,6 +60,7 @@ workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
     const outputBytes = new Uint8Array(output.byteLength);
     outputBytes.set(output);
+
     workerScope.postMessage(
       {
         type: 'result',
@@ -63,10 +70,18 @@ workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       [outputBytes.buffer],
     );
   } catch (error: unknown) {
-    workerScope.postMessage({
-      type: 'error',
-      requestId: message.requestId,
-      error: String(error),
-    } satisfies WorkerResponse);
+    postError(String(error), message.requestId);
   }
-};
+}
+
+function postReady() {
+  workerScope.postMessage({ type: 'ready' } satisfies WorkerResponse);
+}
+
+function postError(error: string, requestId?: number) {
+  workerScope.postMessage({
+    type: 'error',
+    requestId,
+    error,
+  } satisfies WorkerResponse);
+}
