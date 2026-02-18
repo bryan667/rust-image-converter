@@ -1,4 +1,8 @@
-import type { CompressionPreset, Format } from './types/images.types';
+import type {
+  CompressionPreset,
+  Format,
+  ImageItem,
+} from './types/images.types';
 
 const FORMAT_ALIASES: Record<string, Format> = {
   png: 'png',
@@ -96,3 +100,29 @@ export const knownFormats: Array<{
   { id: 'jpeg', label: 'JPEG', mimeFormat: 'image/jpeg' },
 ];
 export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
+export const getItemSummary = (items: ImageItem[]) => {
+  let output = 0;
+  let queued = 0;
+  let original = 0;
+  let converted = 0;
+  for (const item of items) {
+    if (item.status === 'queued') queued += 1;
+    if (item.status === 'done' && item.output) output += 1;
+    original += item.file.size;
+    if (item.output) converted += item.output.size;
+  }
+  const delta = Math.max(0, original - converted);
+  const percent = delta > 0 ? Math.round((delta / original) * 100) : 0;
+
+  return {
+    output,
+    queued,
+    stats: {
+      original,
+      converted,
+      delta,
+      percent,
+    },
+  };
+};

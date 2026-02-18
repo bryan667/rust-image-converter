@@ -7,6 +7,7 @@ import {
   compressionOptions,
   MAX_FILE_SIZE_BYTES,
   knownFormats,
+  getItemSummary,
 } from './helpers';
 import type { ConversionSettings, ImageItem } from './types/images.types';
 import WasmWorkerPool from './workers/WasmWorkerPool';
@@ -250,29 +251,7 @@ const App = () => {
   };
 
   const itemSummary = useMemo(() => {
-    let output = 0;
-    let queued = 0;
-    let original = 0;
-    let converted = 0;
-    for (const item of items) {
-      if (item.status === 'queued') queued += 1;
-      if (item.status === 'done' && item.output) output += 1;
-      original += item.file.size;
-      if (item.output) converted += item.output.size;
-    }
-    const delta = Math.max(0, original - converted);
-    const percent = delta > 0 ? Math.round((delta / original) * 100) : 0;
-
-    return {
-      output,
-      queued,
-      stats: {
-        original,
-        converted,
-        delta,
-        percent,
-      },
-    };
+    return getItemSummary(items);
   }, [items]);
 
   return (
