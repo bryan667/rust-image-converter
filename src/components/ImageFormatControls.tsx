@@ -2,13 +2,16 @@ import {
   type CompressionPreset,
   type ConversionSettings,
 } from '../types/images.types';
-import { formatLabels, knownFormats } from '../helpers';
+import { knownFormats } from '../helpers';
 import type { Dispatch, SetStateAction } from 'react';
 
 type ImageFormatControlsProps = {
   conversionSettings: ConversionSettings;
   setConversionSettings: Dispatch<SetStateAction<ConversionSettings>>;
-  compressionLabels: Record<CompressionPreset, string>;
+  compressionLabels: Array<{
+    preset: CompressionPreset;
+    label: string;
+  }>;
 };
 
 export default function ImageFormatControls({
@@ -39,51 +42,32 @@ export default function ImageFormatControls({
       <div className="control-block">
         <label>Target format</label>
         <div className="pill-group">
-          {knownFormats.map((format) => (
+          {knownFormats.map(({ id, label }) => (
             <button
-              key={format}
-              className={
-                conversionSettings.targetFormat === format ? 'active' : ''
-              }
-              onClick={() => updateSetting('targetFormat', format)}
+              key={id}
+              className={conversionSettings.targetFormat === id ? 'active' : ''}
+              onClick={() => updateSetting('targetFormat', id)}
             >
-              {formatLabels[format]}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
       <div className="control-block">
-        <label>Compression</label>
+        <label>Compression levels</label>
         <div className="toggle-row">
-          <button
-            className={
-              conversionSettings.compressionPreset === 'lossless'
-                ? 'active'
-                : ''
-            }
-            onClick={() => updateSetting('compressionPreset', 'lossless')}
-          >
-            {compressionLabels.lossless}
-          </button>
-          <button
-            className={
-              conversionSettings.compressionPreset === 'sweet_spot'
-                ? 'active'
-                : ''
-            }
-            onClick={() => updateSetting('compressionPreset', 'sweet_spot')}
-          >
-            {compressionLabels.sweet_spot}
-          </button>
-          <button
-            className={
-              conversionSettings.compressionPreset === 'lossy' ? 'active' : ''
-            }
-            onClick={() => updateSetting('compressionPreset', 'lossy')}
-          >
-            {compressionLabels.lossy}
-          </button>
+          {compressionLabels.map(({ preset, label }) => (
+            <button
+              key={preset}
+              className={
+                conversionSettings.compressionPreset === preset ? 'active' : ''
+              }
+              onClick={() => updateSetting('compressionPreset', preset)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <small>
           PNG output is always lossless. JPEG and WebP use quality presets.

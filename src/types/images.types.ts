@@ -1,5 +1,5 @@
 export type Format = 'webp' | 'png' | 'jpeg';
-export type CompressionPreset = 'lossless' | 'sweet_spot' | 'lossy';
+export type CompressionPreset = 'lossless' | 'sweet_spot' | 'lossy' | 'ultra';
 export type ConvertStatus =
   | 'queued'
   | 'processing'

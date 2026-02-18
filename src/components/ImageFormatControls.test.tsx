@@ -1,6 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ConversionSettings } from '../types/images.types';
+import type {
+  CompressionPreset,
+  ConversionSettings,
+} from '../types/images.types';
 import ImageFormatControls from './ImageFormatControls';
 
 const baseSettings: ConversionSettings = {
@@ -10,11 +13,12 @@ const baseSettings: ConversionSettings = {
   resizePercent: 100,
 };
 
-const compressionLabels = {
-  lossless: 'Lossless (95%)',
-  sweet_spot: 'Sweet spot (70%)',
-  lossy: 'Lossy (45%)',
-} as const;
+const compressionLabels: Array<{ preset: CompressionPreset; label: string }> = [
+  { preset: 'lossless', label: 'High quality (95%)' },
+  { preset: 'sweet_spot', label: 'Sweet spot (70%)' },
+  { preset: 'lossy', label: 'Lossy (45%)' },
+  { preset: 'ultra', label: 'Ultra (25%)' },
+];
 
 const renderControls = (setConversionSettings = vi.fn()) =>
   render(

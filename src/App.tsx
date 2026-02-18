@@ -6,7 +6,7 @@ import ProcessedItemsSection from './components/ProcessedItemsSection';
 import {
   compressionOptions,
   MAX_FILE_SIZE_BYTES,
-  mimeByFormat,
+  knownFormats,
 } from './helpers';
 import type { ConversionSettings, ImageItem } from './types/images.types';
 import WasmWorkerPool from './workers/WasmWorkerPool';
@@ -17,6 +17,7 @@ import {
   formatFromFile,
   getImageDimensions,
 } from './helpers';
+import { ConversionStats } from './components/ConversionStats';
 
 const App = () => {
   const workerPoolRef = useRef<WasmWorkerPool | null>(null);
@@ -122,9 +123,16 @@ const App = () => {
     const queuedItems = items.filter((item) => item.status === 'queued');
     if (!queuedItems.length) return;
 
+    const selectedCompression = compressionOptions.find(
+      (option) => option.preset === conversionSettings.compressionPreset,
+    );
+    if (!selectedCompression) return;
+    const targetFormatConfig = knownFormats.find(
+      (format) => format.id === conversionSettings.targetFormat,
+    );
+    if (!targetFormatConfig) return;
+
     setIsConverting(true);
-    const selectedCompression =
-      compressionOptions[conversionSettings.compressionPreset];
     const normalizedPercent = Math.min(
       100,
       Math.max(1, conversionSettings.resizePercent),
@@ -159,7 +167,7 @@ const App = () => {
         });
         const outputBuffer = outputBytes.slice().buffer;
         const outputBlob = new Blob([outputBuffer], {
-          type: mimeByFormat[conversionSettings.targetFormat],
+          type: targetFormatConfig.mimeFormat,
         });
         const outputUrl = URL.createObjectURL(outputBlob);
         const outputName = replaceExtension(
@@ -252,8 +260,9 @@ const App = () => {
       original += item.file.size;
       if (item.output) converted += item.output.size;
     }
-    const delta = original - converted;
-    const percent = original > 0 ? Math.round((delta / original) * 100) : 0;
+    const delta = Math.max(0, original - converted);
+    const percent = delta > 0 ? Math.round((delta / original) * 100) : 0;
+
     return {
       output,
       queued,
@@ -308,11 +317,7 @@ const App = () => {
       <ImageFormatControls
         conversionSettings={conversionSettings}
         setConversionSettings={setConversionSettings}
-        compressionLabels={{
-          lossless: compressionOptions.lossless.label,
-          sweet_spot: compressionOptions.sweet_spot.label,
-          lossy: compressionOptions.lossy.label,
-        }}
+        compressionLabels={compressionOptions}
       />
 
       <DropImagesSection
@@ -322,24 +327,7 @@ const App = () => {
       />
 
       <section className="actions">
-        <div className="stats">
-          <div>
-            <span>Original</span>
-            <strong>{formatBytes(itemSummary.stats.original)}</strong>
-          </div>
-          <div>
-            <span>Converted</span>
-            <strong>{formatBytes(itemSummary.stats.converted)}</strong>
-          </div>
-          <div>
-            <span>Saved</span>
-            <strong>
-              {itemSummary.stats.original
-                ? `${formatBytes(itemSummary.stats.delta)} (${itemSummary.stats.percent}%)`
-                : '-'}
-            </strong>
-          </div>
-        </div>
+        <ConversionStats itemSummary={itemSummary} />
         <div className="action-buttons">
           <button
             onClick={handleConvertAll}

@@ -59,26 +59,40 @@ export const getImageDimensions = async (file: File) => {
   return { width, height };
 };
 
-export const compressionOptions: Record<
-  CompressionPreset,
-  { label: string; quality: number; lossless: boolean }
-> = {
-  lossless: { label: 'High quality (95%)', quality: 95, lossless: false },
-  sweet_spot: { label: 'Sweet spot (70%)', quality: 70, lossless: false },
-  lossy: { label: 'Lossy (45%)', quality: 45, lossless: false },
-};
+export const compressionOptions: Array<{
+  preset: CompressionPreset;
+  label: string;
+  quality: number;
+  lossless: boolean;
+}> = [
+  {
+    preset: 'lossless',
+    label: 'High quality (95%)',
+    quality: 95,
+    lossless: false,
+  },
+  {
+    preset: 'sweet_spot',
+    label: 'Sweet spot (70%)',
+    quality: 70,
+    lossless: false,
+  },
+  { preset: 'lossy', label: 'Lossy (45%)', quality: 45, lossless: false },
+  {
+    preset: 'ultra',
+    label: 'Ultra (25%)',
+    quality: 25,
+    lossless: false,
+  },
+];
 
-export const formatLabels: Record<Format, string> = {
-  webp: 'WebP',
-  png: 'PNG',
-  jpeg: 'JPEG',
-};
-
-export const mimeByFormat: Record<Format, string> = {
-  webp: 'image/webp',
-  png: 'image/png',
-  jpeg: 'image/jpeg',
-};
-
-export const knownFormats: Format[] = ['webp', 'png', 'jpeg'];
+export const knownFormats: Array<{
+  id: Format;
+  label: string;
+  mimeFormat: string;
+}> = [
+  { id: 'webp', label: 'WebP', mimeFormat: 'image/webp' },
+  { id: 'png', label: 'PNG', mimeFormat: 'image/png' },
+  { id: 'jpeg', label: 'JPEG', mimeFormat: 'image/jpeg' },
+];
 export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
